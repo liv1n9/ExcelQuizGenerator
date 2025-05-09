@@ -1,0 +1,72 @@
+/* Custom styles for Quiz Generator application */
+
+/* Add some margin to the body for better spacing */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Style the file input */
+.form-control[type="file"] {
+    padding: 0.5rem;
+}
+
+/* Custom styling for loading overlay */
+#loadingOverlay {
+    z-index: 9999;
+}
+
+/* Make cursor a pointer on accordion buttons for better UX */
+.accordion-button {
+    cursor: pointer;
+}
+
+/* Add animations for the file upload area */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.file-drop-area {
+    border: 2px dashed var(--bs-border-color);
+    border-radius: 0.375rem;
+    padding: 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.file-drop-area.highlight {
+    border-color: var(--bs-primary);
+    background-color: rgba(var(--bs-primary-rgb), 0.05);
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+/* Add a smooth transition effect for download buttons */
+#downloadArea .btn {
+    transition: all 0.3s ease;
+}
+
+#downloadArea .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .card-header h1 {
+        font-size: 1.5rem;
+    }
+    
+    #downloadArea .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+}
