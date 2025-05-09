@@ -29,13 +29,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // Validate file type
         const file = excelFileInput.files[0];
         if (!file) {
-            showAlert('Please select an Excel file.', 'danger');
+            showAlert('Vui lòng chọn một file Excel.', 'danger');
             return;
         }
         
         const fileExt = file.name.split('.').pop().toLowerCase();
         if (fileExt !== 'xlsx' && fileExt !== 'xls') {
-            showAlert('Invalid file type. Please upload an Excel file (.xlsx or .xls).', 'danger');
+            showAlert('Loại file không hợp lệ. Vui lòng tải lên file Excel (.xlsx hoặc .xls).', 'danger');
             return;
         }
         
@@ -44,12 +44,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const numVersions = parseInt(numVersionsInput.value);
         
         if (isNaN(numQuestions) || numQuestions <= 0) {
-            showAlert('Number of questions must be a positive number.', 'danger');
+            showAlert('Số câu hỏi phải là một số dương.', 'danger');
             return;
         }
         
         if (isNaN(numVersions) || numVersions <= 0) {
-            showAlert('Number of versions must be a positive number.', 'danger');
+            showAlert('Số phiên bản phải là một số dương.', 'danger');
             return;
         }
         
@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showAlert(data.error, 'danger');
             } else {
                 // Show success message
-                showAlert('Files generated successfully! Click the download buttons below.', 'success');
+                showAlert('Tạo file thành công! Bấm vào các nút bên dưới để tải xuống.', 'success');
                 
                 // Set download links
                 regularDownloadBtn.href = `/download/${data.regular_zip}`;
@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingOverlay.classList.add('d-none');
             
             // Show error message
-            showAlert('An error occurred: ' + error.message, 'danger');
+            showAlert('Đã xảy ra lỗi: ' + error.message, 'danger');
             console.error('Error:', error);
         });
     });
@@ -130,6 +130,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Add example values for better UX
-    numQuestionsInput.placeholder = "e.g., 10";
-    numVersionsInput.placeholder = "e.g., 2";
+    numQuestionsInput.placeholder = "VD: 10";
+    numVersionsInput.placeholder = "VD: 2";
 });

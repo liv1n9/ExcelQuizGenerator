@@ -31,17 +31,17 @@ def upload_file():
     try:
         # Check if the post request has the file part
         if 'excelFile' not in request.files:
-            return jsonify({'error': 'No file part'}), 400
+            return jsonify({'error': 'Không tìm thấy file'}), 400
         
         file = request.files['excelFile']
         
         # If user does not select file
         if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+            return jsonify({'error': 'Chưa chọn file'}), 400
         
         # Check if it's an allowed file type
         if not allowed_file(file.filename):
-            return jsonify({'error': 'Invalid file type. Please upload an Excel file (.xlsx or .xls)'}), 400
+            return jsonify({'error': 'Loại file không hợp lệ. Vui lòng tải lên file Excel (.xlsx hoặc .xls)'}), 400
         
         # Get form data
         num_questions = request.form.get('numQuestions')
@@ -49,21 +49,24 @@ def upload_file():
         
         # Validate form data
         if not num_questions or not num_versions:
-            return jsonify({'error': 'Please provide number of questions and versions'}), 400
+            return jsonify({'error': 'Vui lòng nhập số câu hỏi và số phiên bản'}), 400
         
         try:
             num_questions = int(num_questions)
             num_versions = int(num_versions)
         except ValueError:
-            return jsonify({'error': 'Number of questions and versions must be integers'}), 400
+            return jsonify({'error': 'Số câu hỏi và số phiên bản phải là số nguyên'}), 400
         
         if num_questions <= 0 or num_versions <= 0:
-            return jsonify({'error': 'Number of questions and versions must be positive'}), 400
+            return jsonify({'error': 'Số câu hỏi và số phiên bản phải là số dương'}), 400
         
         # Save the file to a temporary location
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(TEMP_FOLDER, filename)
-        file.save(file_path)
+        if file.filename:
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(TEMP_FOLDER, filename)
+            file.save(file_path)
+        else:
+            return jsonify({'error': 'Tên file không hợp lệ'}), 400
         
         # Validate Excel file format
         validation_result = validate_excel_file(file_path)
@@ -78,7 +81,7 @@ def upload_file():
         total_questions = len(questions_df)
         if total_questions < num_questions:
             os.remove(file_path)  # Remove temporary file
-            return jsonify({'error': f'Excel file contains only {total_questions} questions, but {num_questions} were requested'}), 400
+            return jsonify({'error': f'File Excel chỉ chứa {total_questions} câu hỏi, nhưng bạn yêu cầu {num_questions} câu'}), 400
         
         zip_files = generate_zip_files(questions_df, num_questions, num_versions)
         
@@ -87,14 +90,14 @@ def upload_file():
         
         return jsonify({
             'success': True,
-            'message': 'Files generated successfully',
+            'message': 'Tạo file thành công',
             'regular_zip': zip_files['regular'],
             'highlighted_zip': zip_files['highlighted']
         })
     
     except Exception as e:
         logger.exception("Error processing request")
-        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+        return jsonify({'error': f'Đã xảy ra lỗi: {str(e)}'}), 500
 
 @app.route('/download/<filename>')
 def download_file(filename):
@@ -103,7 +106,7 @@ def download_file(filename):
         return send_file(file_path, as_attachment=True)
     except Exception as e:
         logger.exception("Error downloading file")
-        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+        return jsonify({'error': f'Đã xảy ra lỗi: {str(e)}'}), 500
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -111,7 +114,7 @@ def page_not_found(e):
 
 @app.errorhandler(500)
 def server_error(e):
-    return jsonify({'error': 'An internal server error occurred'}), 500
+    return jsonify({'error': 'Đã xảy ra lỗi nội bộ máy chủ'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

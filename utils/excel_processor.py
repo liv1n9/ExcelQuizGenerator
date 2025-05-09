@@ -18,28 +18,32 @@ def validate_excel_file(file_path):
         # Check if all required columns are present
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
-            return {'error': f'Missing required columns: {", ".join(missing_columns)}'}
+            return {'error': f'Thiếu các cột yêu cầu: {", ".join(missing_columns)}'}
         
         # Check if any required columns are empty
         empty_columns = []
         for col in required_columns:
-            if df[col].isna().any():
+            # Check if the column has any NaN values
+            has_empty = df[col].isna().any()
+            if isinstance(has_empty, bool) and has_empty:
+                empty_columns.append(col)
+            elif hasattr(has_empty, 'item') and has_empty.item():
                 empty_columns.append(col)
         
         if empty_columns:
-            return {'error': f'The following columns contain empty values: {", ".join(empty_columns)}'}
+            return {'error': f'Các cột sau đây chứa giá trị trống: {", ".join(empty_columns)}'}
         
         # Validate answer column values
         valid_answers = ['A', 'B', 'C', 'D']
-        invalid_answers = df[~df['đáp án'].isin(valid_answers)]['đáp án'].unique()
+        invalid_answers = df[~df['đáp án'].isin(valid_answers)]['đáp án'].drop_duplicates().tolist()
         if len(invalid_answers) > 0:
-            return {'error': f'Invalid answer values found: {", ".join(str(a) for a in invalid_answers)}. Valid answers are: A, B, C, D'}
+            return {'error': f'Tìm thấy giá trị đáp án không hợp lệ: {", ".join(str(a) for a in invalid_answers)}. Đáp án hợp lệ là: A, B, C, D'}
         
         return {'success': True}
     
     except Exception as e:
         logger.exception("Error validating Excel file")
-        return {'error': f'Error processing Excel file: {str(e)}'}
+        return {'error': f'Lỗi xử lý file Excel: {str(e)}'}
 
 def get_random_questions(df, num_questions):
     """
