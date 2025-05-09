@@ -12,7 +12,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def create_word_document(questions_df, highlight_answers=False, class_name="", subject_name=""):
+def create_word_document(questions_df, highlight_answers=False, class_name="", subject_name="", version=0):
     """
     Creates a Word document with the given questions
     If highlight_answers is True, the correct answers are highlighted
@@ -45,7 +45,15 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
     run = header.add_run(title_text)
     run.bold = True
     run.font.name = 'Times New Roman'
-    run.font.size = Pt(10)
+    run.font.size = Pt(8)
+    
+    # Add version number centered
+    version_para = doc.add_paragraph()
+    version_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    version_run = version_para.add_run(f"Đề số {version + 1}")  # version starts from 0 in code
+    version_run.bold = True
+    version_run.font.name = 'Times New Roman'
+    version_run.font.size = Pt(8)
     
     # Add student information section without underlines
     info_para = doc.add_paragraph()
@@ -149,7 +157,8 @@ def generate_zip_files(questions_df, num_questions, num_versions, class_name="",
                 version_questions, 
                 highlight_answers=False,
                 class_name=class_name,
-                subject_name=subject_name
+                subject_name=subject_name,
+                version=version-1  # version-1 because version starts at 1 in the loop
             )
             
             # Create highlighted document with class and subject name
@@ -157,7 +166,8 @@ def generate_zip_files(questions_df, num_questions, num_versions, class_name="",
                 version_questions, 
                 highlight_answers=True,
                 class_name=class_name,
-                subject_name=subject_name
+                subject_name=subject_name,
+                version=version-1  # version-1 because version starts at 1 in the loop
             )
             
             # Save documents to temporary files
