@@ -2,8 +2,9 @@ import os
 import zipfile
 import tempfile
 from docx import Document
-from docx.shared import Pt, RGBColor
+from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.section import WD_ORIENTATION
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,26 +16,49 @@ def create_word_document(questions_df, highlight_answers=False):
     """
     doc = Document()
     
-    # Set document style
+    # Set document to landscape orientation
+    section = doc.sections[0]
+    section.orientation = WD_ORIENTATION.LANDSCAPE
+    # Swap width and height is handled automatically when setting orientation
+    
+    # Set narrower margins to maximize space
+    section.left_margin = Inches(0.5)  # 0.5 inch
+    section.right_margin = Inches(0.5)  # 0.5 inch
+    section.top_margin = Inches(0.5)  # 0.5 inch
+    section.bottom_margin = Inches(0.5)  # 0.5 inch
+    
+    # Set document style with smaller font
     style = doc.styles['Normal']
-    font = style.font
-    font.name = 'Times New Roman'
-    font.size = Pt(12)
+    style.font.name = 'Times New Roman'
+    style.font.size = Pt(10)  # Reduced font size
+    
+    # Set up 2-column layout to better utilize space
+    section = doc.sections[0]
+    sectPr = section._sectPr
+    cols = sectPr.xpath('./w:cols')[0]
+    cols.set('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}num', '2')
+    
+    # Process questions
+    total_questions = len(questions_df)
     
     for index, row in questions_df.iterrows():
-        # Add question number and text
+        # Add question number and text (in bold)
         question_text = f"{index + 1}. {row['Câu hỏi']}"
         paragraph = doc.add_paragraph()
-        paragraph.add_run(question_text)
+        run = paragraph.add_run(question_text)
+        run.bold = True  # Make questions bold
+        paragraph.paragraph_format.space_after = Pt(2)  # Reduce space after paragraph
         
-        # Add options
+        # Add options with less indentation and spacing
         options = ['A', 'B', 'C', 'D']
         correct_answer = row['đáp án']
         
         for option in options:
             option_text = f"{option}: {row[option]}"
             paragraph = doc.add_paragraph()
-            paragraph.paragraph_format.left_indent = Pt(20)
+            paragraph.paragraph_format.left_indent = Pt(12)  # Less indentation
+            paragraph.paragraph_format.space_before = Pt(0)  # No space before
+            paragraph.paragraph_format.space_after = Pt(0)  # No space after
             
             if highlight_answers and option == correct_answer:
                 # Highlight correct answer with bold
@@ -43,8 +67,10 @@ def create_word_document(questions_df, highlight_answers=False):
             else:
                 paragraph.add_run(option_text)
         
-        # Add a blank line between questions
-        doc.add_paragraph()
+        # Add minimal space between questions
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(2)
+        p.paragraph_format.space_after = Pt(2)
     
     return doc
 
