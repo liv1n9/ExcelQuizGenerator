@@ -45,47 +45,15 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
     run = header.add_run(title_text)
     run.bold = True
     run.font.name = 'Times New Roman'
-    run.font.size = Pt(12)
+    run.font.size = Pt(10)
     
-    # Add student information section
+    # Add student information section without underlines
     info_para = doc.add_paragraph()
-    info_para.add_run("Mã sinh viên: _________________ Họ tên: _________________________________").font.name = 'Times New Roman'
-    info_para.add_run().font.size = Pt(9)
+    info_para.add_run("Mã sinh viên:                     Họ tên:                    ").font.name = 'Times New Roman'
+    info_para.add_run().font.size = Pt(8)
     
-    # Add answer section - table format
-    doc.add_paragraph("PHIẾU TRẢ LỜI").alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    # Create compact answer table
-    table = doc.add_table(rows=5, cols=min(questions_df.shape[0]+1, 21))  # +1 for header, max 20 questions per row for space
-    table.style = 'Table Grid'
-    
-    # First row - question numbers
-    cell = table.cell(0, 0)
-    cell.text = "Câu số"
-    
-    # Fill in question numbers
-    num_questions = min(questions_df.shape[0], 20)  # Limit to 20 questions for the table
-    for i in range(1, num_questions+1):
-        cell = table.cell(0, i)
-        cell.text = str(i)
-    
-    # Options rows
-    options = ['A', 'B', 'C', 'D']
-    for i, option in enumerate(options, 1):
-        cell = table.cell(i, 0)
-        cell.text = option
-    
-    # Make table compact
-    for row in table.rows:
-        row.height = Pt(12)
-        for cell in row.cells:
-            for paragraph in cell.paragraphs:
-                for run in paragraph.runs:
-                    run.font.size = Pt(8)
-                    run.font.name = 'Times New Roman'
-    
-    # Add a separator after the student info/answer section
-    doc.add_paragraph("_" * 80)
+    # Add a small space after the student info section
+    doc.add_paragraph()
     
     # Set up 2-column layout for questions section
     section.start_type = WD_SECTION.NEW_PAGE
@@ -103,15 +71,9 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
     # Try to set font style as a default for the document
     try:
         style = doc.styles['Normal']
-        if hasattr(style._element, 'rPr') and style._element.rPr is not None:
-            style._element.rPr.rFonts.set(qn('w:ascii'), 'Times New Roman')
-            style._element.rPr.sz.val = 180  # 9pt font (doubled for internal format)
-        else:
-            # Handle case where rPr doesn't exist
-            pass
-    except Exception as e:
         # We'll handle font formatting at the run level instead
-        logger.debug(f"Error setting default font: {str(e)}")
+    except Exception as e:
+        logger.debug(f"Error accessing style: {str(e)}")
         
     # Process questions
     total_questions = len(questions_df)
@@ -126,7 +88,7 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
         run = paragraph.add_run(question_text)
         run.bold = True
         run.font.name = 'Times New Roman'
-        run.font.size = Pt(9)  # Smaller font
+        run.font.size = Pt(8)  # Smaller font
         
         # Add options with minimal spacing and indentation
         options = ['A', 'B', 'C', 'D']
@@ -144,11 +106,11 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
                 run = paragraph.add_run(option_text)
                 run.bold = True
                 run.font.name = 'Times New Roman'
-                run.font.size = Pt(9)
+                run.font.size = Pt(8)
             else:
                 run = paragraph.add_run(option_text)
                 run.font.name = 'Times New Roman'
-                run.font.size = Pt(9)
+                run.font.size = Pt(8)
         
         # Add minimal separator between questions
         p = doc.add_paragraph()
