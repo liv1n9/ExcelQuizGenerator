@@ -4,7 +4,7 @@ import tempfile
 from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 from werkzeug.utils import secure_filename
-from utils.excel_processor import validate_excel_file, get_random_questions
+from utils.excel_processor import validate_excel_file, validate_excel_format, get_random_questions
 from utils.document_generator import generate_zip_files
 
 # Configure logging
@@ -75,13 +75,30 @@ def upload_file():
             return jsonify(validation_result), 400
         
         # Generate the ZIP files
-        questions_df = pd.read_excel(file_path)
+        # Read all sheets from Excel file
+        excel_file = pd.ExcelFile(file_path)
+        sheet_names = excel_file.sheet_names
+        
+        # Concatenate all sheets into one dataframe
+        all_questions = []
+        for sheet_name in sheet_names:
+            sheet_df = pd.read_excel(file_path, sheet_name=sheet_name)
+            # Validate sheet format
+            validation_result = validate_excel_format(sheet_df)
+            if 'error' in validation_result:
+                os.remove(file_path)  # Remove temporary file
+                return jsonify({'error': f'Lỗi trong sheet "{sheet_name}": {validation_result["error"]}'}), 400
+            
+            all_questions.append(sheet_df)
+        
+        # Combine all sheets
+        questions_df = pd.concat(all_questions, ignore_index=True)
         
         # Make sure we have enough questions
         total_questions = len(questions_df)
         if total_questions < num_questions:
             os.remove(file_path)  # Remove temporary file
-            return jsonify({'error': f'File Excel chỉ chứa {total_questions} câu hỏi, nhưng bạn yêu cầu {num_questions} câu'}), 400
+            return jsonify({'error': f'File Excel chỉ chứa {total_questions} câu hỏi từ tất cả các sheet, nhưng bạn yêu cầu {num_questions} câu'}), 400
         
         zip_files = generate_zip_files(questions_df, num_questions, num_versions)
         

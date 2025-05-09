@@ -5,7 +5,8 @@
 ## Tính Năng
 
 - Tải lên file Excel chứa câu hỏi trắc nghiệm và đáp án
-- Chọn ngẫu nhiên số lượng câu hỏi mong muốn
+- Hỗ trợ file Excel có nhiều sheet (tất cả các sheet đều phải có cùng định dạng)
+- Chọn ngẫu nhiên số lượng câu hỏi mong muốn từ tất cả các sheet
 - Tạo nhiều phiên bản đề thi khác nhau
 - Tải xuống file Word định dạng đẹp
 - Hỗ trợ hai phiên bản: đề thi thường và đề thi có bôi đậm đáp án đúng (dành cho giáo viên)
