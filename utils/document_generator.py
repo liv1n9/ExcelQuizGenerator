@@ -5,6 +5,9 @@ from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.section import WD_ORIENTATION
+from docx.enum.section import WD_SECTION
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,25 +22,35 @@ def create_word_document(questions_df, highlight_answers=False):
     # Set document to landscape orientation
     section = doc.sections[0]
     section.orientation = WD_ORIENTATION.LANDSCAPE
-    # Swap width and height is handled automatically when setting orientation
     
     # Set narrower margins to maximize space
-    section.left_margin = Inches(0.5)  # 0.5 inch
-    section.right_margin = Inches(0.5)  # 0.5 inch
-    section.top_margin = Inches(0.5)  # 0.5 inch
-    section.bottom_margin = Inches(0.5)  # 0.5 inch
+    section.left_margin = Inches(0.3)  # 0.3 inch
+    section.right_margin = Inches(0.3)  # 0.3 inch
+    section.top_margin = Inches(0.3)  # 0.3 inch
+    section.bottom_margin = Inches(0.3)  # 0.3 inch
     
-    # Set document style with smaller font
-    style = doc.styles['Normal']
-    style.font.name = 'Times New Roman'
-    style.font.size = Pt(10)  # Reduced font size
+    # Set up 2-column layout
+    section.start_type = WD_SECTION.NEW_PAGE
     
-    # Set up 2-column layout to better utilize space
-    section = doc.sections[0]
+    # Create two columns
     sectPr = section._sectPr
-    cols = sectPr.xpath('./w:cols')[0]
-    cols.set('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}num', '2')
+    if not sectPr.xpath('./w:cols'):
+        cols = OxmlElement('w:cols')
+        cols.set(qn('w:num'), '2')
+        sectPr.append(cols)
+    else:
+        cols = sectPr.xpath('./w:cols')[0]
+        cols.set(qn('w:num'), '2')
     
+    # Try to set font style as a default for the document
+    try:
+        style = doc.styles['Normal']
+        style._element.rPr.rFonts.set(qn('w:ascii'), 'Times New Roman')
+        style._element.rPr.sz.val = 180  # 9pt font (doubled for internal format)
+    except:
+        # We'll handle font formatting at the run level instead
+        pass
+        
     # Process questions
     total_questions = len(questions_df)
     
@@ -45,32 +58,40 @@ def create_word_document(questions_df, highlight_answers=False):
         # Add question number and text (in bold)
         question_text = f"{index + 1}. {row['Câu hỏi']}"
         paragraph = doc.add_paragraph()
-        run = paragraph.add_run(question_text)
-        run.bold = True  # Make questions bold
-        paragraph.paragraph_format.space_after = Pt(2)  # Reduce space after paragraph
+        paragraph.paragraph_format.space_after = Pt(1)  # Minimal space
         
-        # Add options with less indentation and spacing
+        # Add question in bold with Times New Roman font
+        run = paragraph.add_run(question_text)
+        run.bold = True
+        run.font.name = 'Times New Roman'
+        run.font.size = Pt(9)  # Smaller font
+        
+        # Add options with minimal spacing and indentation
         options = ['A', 'B', 'C', 'D']
         correct_answer = row['đáp án']
         
         for option in options:
             option_text = f"{option}: {row[option]}"
             paragraph = doc.add_paragraph()
-            paragraph.paragraph_format.left_indent = Pt(12)  # Less indentation
-            paragraph.paragraph_format.space_before = Pt(0)  # No space before
-            paragraph.paragraph_format.space_after = Pt(0)  # No space after
+            paragraph.paragraph_format.left_indent = Pt(8)  # Smaller indentation
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(0)
             
             if highlight_answers and option == correct_answer:
                 # Highlight correct answer with bold
                 run = paragraph.add_run(option_text)
                 run.bold = True
+                run.font.name = 'Times New Roman'
+                run.font.size = Pt(9)
             else:
-                paragraph.add_run(option_text)
+                run = paragraph.add_run(option_text)
+                run.font.name = 'Times New Roman'
+                run.font.size = Pt(9)
         
-        # Add minimal space between questions
+        # Add minimal separator between questions
         p = doc.add_paragraph()
-        p.paragraph_format.space_before = Pt(2)
-        p.paragraph_format.space_after = Pt(2)
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(1)
     
     return doc
 
