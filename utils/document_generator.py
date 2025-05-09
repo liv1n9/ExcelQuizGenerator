@@ -12,10 +12,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def create_word_document(questions_df, highlight_answers=False):
+def create_word_document(questions_df, highlight_answers=False, class_name="", subject_name=""):
     """
     Creates a Word document with the given questions
     If highlight_answers is True, the correct answers are highlighted
+    Optional class_name and subject_name parameters for document header
     """
     doc = Document()
     
@@ -29,7 +30,64 @@ def create_word_document(questions_df, highlight_answers=False):
     section.top_margin = Inches(0.3)  # 0.3 inch
     section.bottom_margin = Inches(0.3)  # 0.3 inch
     
-    # Set up 2-column layout
+    # Add document header with subject and class name
+    header = doc.add_paragraph()
+    header.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Create title text
+    title_text = "ĐỀ THI"
+    if subject_name:
+        title_text += f" {subject_name}"
+    if class_name:
+        title_text += f" - {class_name}"
+    
+    # Add the title in bold, centered
+    run = header.add_run(title_text)
+    run.bold = True
+    run.font.name = 'Times New Roman'
+    run.font.size = Pt(12)
+    
+    # Add student information section
+    info_para = doc.add_paragraph()
+    info_para.add_run("Mã sinh viên: _________________ Họ tên: _________________________________").font.name = 'Times New Roman'
+    info_para.add_run().font.size = Pt(9)
+    
+    # Add answer section - table format
+    doc.add_paragraph("PHIẾU TRẢ LỜI").alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Create compact answer table
+    table = doc.add_table(rows=5, cols=min(questions_df.shape[0]+1, 21))  # +1 for header, max 20 questions per row for space
+    table.style = 'Table Grid'
+    
+    # First row - question numbers
+    cell = table.cell(0, 0)
+    cell.text = "Câu số"
+    
+    # Fill in question numbers
+    num_questions = min(questions_df.shape[0], 20)  # Limit to 20 questions for the table
+    for i in range(1, num_questions+1):
+        cell = table.cell(0, i)
+        cell.text = str(i)
+    
+    # Options rows
+    options = ['A', 'B', 'C', 'D']
+    for i, option in enumerate(options, 1):
+        cell = table.cell(i, 0)
+        cell.text = option
+    
+    # Make table compact
+    for row in table.rows:
+        row.height = Pt(12)
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(8)
+                    run.font.name = 'Times New Roman'
+    
+    # Add a separator after the student info/answer section
+    doc.add_paragraph("_" * 80)
+    
+    # Set up 2-column layout for questions section
     section.start_type = WD_SECTION.NEW_PAGE
     
     # Create two columns
@@ -45,11 +103,15 @@ def create_word_document(questions_df, highlight_answers=False):
     # Try to set font style as a default for the document
     try:
         style = doc.styles['Normal']
-        style._element.rPr.rFonts.set(qn('w:ascii'), 'Times New Roman')
-        style._element.rPr.sz.val = 180  # 9pt font (doubled for internal format)
-    except:
+        if hasattr(style._element, 'rPr') and style._element.rPr is not None:
+            style._element.rPr.rFonts.set(qn('w:ascii'), 'Times New Roman')
+            style._element.rPr.sz.val = 180  # 9pt font (doubled for internal format)
+        else:
+            # Handle case where rPr doesn't exist
+            pass
+    except Exception as e:
         # We'll handle font formatting at the run level instead
-        pass
+        logger.debug(f"Error setting default font: {str(e)}")
         
     # Process questions
     total_questions = len(questions_df)
@@ -95,7 +157,7 @@ def create_word_document(questions_df, highlight_answers=False):
     
     return doc
 
-def generate_zip_files(questions_df, num_questions, num_versions):
+def generate_zip_files(questions_df, num_questions, num_versions, class_name="", subject_name=""):
     """
     Generates two ZIP files:
     1. Regular version without highlighted answers
@@ -120,11 +182,21 @@ def generate_zip_files(questions_df, num_questions, num_versions):
             # Get random questions for this version
             version_questions = get_random_questions(questions_df, num_questions)
             
-            # Create regular document
-            regular_doc = create_word_document(version_questions, highlight_answers=False)
+            # Create regular document with class and subject name
+            regular_doc = create_word_document(
+                version_questions, 
+                highlight_answers=False,
+                class_name=class_name,
+                subject_name=subject_name
+            )
             
-            # Create highlighted document
-            highlighted_doc = create_word_document(version_questions, highlight_answers=True)
+            # Create highlighted document with class and subject name
+            highlighted_doc = create_word_document(
+                version_questions, 
+                highlight_answers=True,
+                class_name=class_name,
+                subject_name=subject_name
+            )
             
             # Save documents to temporary files
             regular_doc_path = os.path.join(temp_dir, f"quiz_version_{version}.docx")

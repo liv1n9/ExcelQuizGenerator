@@ -46,6 +46,8 @@ def upload_file():
         # Get form data
         num_questions = request.form.get('numQuestions')
         num_versions = request.form.get('numVersions')
+        class_name = request.form.get('className', '')
+        subject_name = request.form.get('subjectName', '')
         
         # Validate form data
         if not num_questions or not num_versions:
@@ -100,7 +102,7 @@ def upload_file():
             os.remove(file_path)  # Remove temporary file
             return jsonify({'error': f'File Excel chỉ chứa {total_questions} câu hỏi từ tất cả các sheet, nhưng bạn yêu cầu {num_questions} câu'}), 400
         
-        zip_files = generate_zip_files(questions_df, num_questions, num_versions)
+        zip_files = generate_zip_files(questions_df, num_questions, num_versions, class_name, subject_name)
         
         # Clean up temporary file
         os.remove(file_path)
