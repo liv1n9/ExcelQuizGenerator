@@ -24,10 +24,7 @@ def validate_excel_file(file_path):
         empty_columns = []
         for col in required_columns:
             # Check if the column has any NaN values
-            has_empty = df[col].isna().any()
-            if isinstance(has_empty, bool) and has_empty:
-                empty_columns.append(col)
-            elif hasattr(has_empty, 'item') and has_empty.item():
+            if pd.isna(df[col]).any():
                 empty_columns.append(col)
         
         if empty_columns:
@@ -35,9 +32,14 @@ def validate_excel_file(file_path):
         
         # Validate answer column values
         valid_answers = ['A', 'B', 'C', 'D']
-        invalid_answers = df[~df['đáp án'].isin(valid_answers)]['đáp án'].drop_duplicates().tolist()
+        # Check for invalid answers
+        invalid_answers = []
+        for answer in df['đáp án'].unique():
+            if answer not in valid_answers:
+                invalid_answers.append(str(answer))
+        
         if len(invalid_answers) > 0:
-            return {'error': f'Tìm thấy giá trị đáp án không hợp lệ: {", ".join(str(a) for a in invalid_answers)}. Đáp án hợp lệ là: A, B, C, D'}
+            return {'error': f'Tìm thấy giá trị đáp án không hợp lệ: {", ".join(invalid_answers)}. Đáp án hợp lệ là: A, B, C, D'}
         
         return {'success': True}
     
