@@ -102,6 +102,13 @@ def upload_file():
             os.remove(file_path)  # Remove temporary file
             return jsonify({'error': f'File Excel chỉ chứa {total_questions} câu hỏi từ tất cả các sheet, nhưng bạn yêu cầu {num_questions} câu'}), 400
         
+        # Check if "Phân loại" column exists and validate
+        if 'Phân loại' in questions_df.columns:
+            num_categories = questions_df['Phân loại'].nunique()
+            if num_questions < num_categories:
+                os.remove(file_path)  # Remove temporary file
+                return jsonify({'error': f'Số câu hỏi ({num_questions}) phải lớn hơn hoặc bằng số phân loại ({num_categories}) để đảm bảo mỗi phân loại có ít nhất 1 câu hỏi'}), 400
+        
         zip_files = generate_zip_files(questions_df, num_questions, num_versions, class_name, subject_name)
         
         # Clean up temporary file

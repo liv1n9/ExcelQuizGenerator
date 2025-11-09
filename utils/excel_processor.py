@@ -38,6 +38,11 @@ def validate_excel_format(df):
         if len(invalid_answers) > 0:
             return {'error': f'Tìm thấy giá trị đáp án không hợp lệ: {", ".join(invalid_answers)}. Đáp án hợp lệ là: A, B, C, D'}
         
+        # Check if "Phân loại" column exists and has empty values
+        if 'Phân loại' in df.columns:
+            if pd.isna(df['Phân loại']).any():
+                return {'error': 'Cột "Phân loại" chứa giá trị trống. Vui lòng điền đầy đủ phân loại cho tất cả câu hỏi'}
+        
         return {'success': True}
     
     except Exception as e:

@@ -192,7 +192,52 @@ def generate_zip_files(questions_df, num_questions, num_versions, class_name="",
 
 def get_random_questions(df, num_questions):
     """
-    Gets a random sample of questions from the dataframe
+    Gets a random sample of questions from the dataframe.
+    If "Phân loại" column exists, ensures at least 1 question from each category.
     """
-    # Return a random sample of the dataframe
-    return df.sample(n=num_questions).reset_index(drop=True)
+    import pandas as pd
+    
+    # Check if "Phân loại" column exists
+    if 'Phân loại' not in df.columns:
+        # No category column, use simple random selection
+        return df.sample(n=num_questions).reset_index(drop=True)
+    
+    # Get unique categories
+    categories = df['Phân loại'].unique()
+    num_categories = len(categories)
+    
+    # Check if we have enough questions to cover all categories
+    if num_questions < num_categories:
+        raise ValueError(f'Số câu hỏi ({num_questions}) phải lớn hơn hoặc bằng số phân loại ({num_categories}) để đảm bảo mỗi phân loại có ít nhất 1 câu hỏi')
+    
+    # Select at least 1 question from each category
+    selected_questions = []
+    selected_indices = []
+    
+    for category in categories:
+        category_questions = df[df['Phân loại'] == category]
+        # Randomly select 1 question from this category
+        sampled = category_questions.sample(n=1)
+        selected_questions.append(sampled)
+        selected_indices.extend(sampled.index.tolist())
+    
+    # Calculate remaining questions to select
+    remaining_questions = num_questions - num_categories
+    
+    if remaining_questions > 0:
+        # Create a pool of remaining questions (all questions except already selected)
+        remaining_df = df[~df.index.isin(selected_indices)]
+        
+        # Randomly select the remaining questions
+        additional_questions = remaining_df.sample(n=remaining_questions)
+        
+        # Add to selected questions
+        selected_questions.append(additional_questions)
+    
+    # Combine all selected questions
+    result_df = pd.concat(selected_questions, ignore_index=True)
+    
+    # Shuffle the final result to mix categories
+    result_df = result_df.sample(frac=1).reset_index(drop=True)
+    
+    return result_df
