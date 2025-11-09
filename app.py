@@ -48,6 +48,8 @@ def upload_file():
         num_versions = request.form.get('numVersions')
         class_name = request.form.get('className', '')
         subject_name = request.form.get('subjectName', '')
+        random_seed = request.form.get('randomSeed', '')
+        shuffle_answers = request.form.get('shuffleAnswers') == 'on'
         
         # Validate form data
         if not num_questions or not num_versions:
@@ -61,6 +63,14 @@ def upload_file():
         
         if num_questions <= 0 or num_versions <= 0:
             return jsonify({'error': 'Số câu hỏi và số phiên bản phải là số dương'}), 400
+        
+        # Parse random seed if provided
+        seed_value = None
+        if random_seed:
+            try:
+                seed_value = int(random_seed)
+            except ValueError:
+                return jsonify({'error': 'Seed phải là một số nguyên'}), 400
         
         # Save the file to a temporary location
         if file.filename:
@@ -104,12 +114,13 @@ def upload_file():
         
         # Check if "Phân loại" column exists and validate
         if 'Phân loại' in questions_df.columns:
-            num_categories = questions_df['Phân loại'].nunique()
-            if num_questions < num_categories:
+            # Count non-null categories only
+            num_categories = questions_df['Phân loại'].dropna().nunique()
+            if num_categories > 0 and num_questions < num_categories:
                 os.remove(file_path)  # Remove temporary file
                 return jsonify({'error': f'Số câu hỏi ({num_questions}) phải lớn hơn hoặc bằng số phân loại ({num_categories}) để đảm bảo mỗi phân loại có ít nhất 1 câu hỏi'}), 400
         
-        zip_files = generate_zip_files(questions_df, num_questions, num_versions, class_name, subject_name)
+        zip_files = generate_zip_files(questions_df, num_questions, num_versions, class_name, subject_name, seed_value, shuffle_answers)
         
         # Clean up temporary file
         os.remove(file_path)

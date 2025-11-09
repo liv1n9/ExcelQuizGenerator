@@ -136,13 +136,22 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
     
     return doc
 
-def generate_zip_files(questions_df, num_questions, num_versions, class_name="", subject_name=""):
+def generate_zip_files(questions_df, num_questions, num_versions, class_name="", subject_name="", random_seed=None, shuffle_answers=False):
     """
     Generates two ZIP files:
     1. Regular version without highlighted answers
     2. Version with highlighted answers
     
     Each version contains both 1-column and 2-column layouts
+    
+    Args:
+        questions_df: DataFrame with questions
+        num_questions: Number of questions per version
+        num_versions: Number of versions to generate
+        class_name: Class name for header
+        subject_name: Subject name for header
+        random_seed: Optional seed for reproducibility
+        shuffle_answers: Whether to shuffle answer options
     
     Returns dictionary with paths to both ZIP files
     """
@@ -160,8 +169,15 @@ def generate_zip_files(questions_df, num_questions, num_versions, class_name="",
          zipfile.ZipFile(highlighted_zip_path, 'w') as highlighted_zip:
         
         for version in range(1, num_versions + 1):
+            # Calculate seed for this version if base seed provided
+            version_seed = random_seed + version if random_seed is not None else None
+            
             # Get random questions for this version
-            version_questions = get_random_questions(questions_df, num_questions)
+            version_questions = get_random_questions(questions_df, num_questions, version_seed)
+            
+            # Shuffle answers if requested
+            if shuffle_answers:
+                version_questions = shuffle_question_answers(version_questions, version_seed)
             
             # Create documents for both 1-column and 2-column layouts
             for num_cols in [2, 1]:  # 2 columns first, then 1 column
@@ -207,54 +223,138 @@ def generate_zip_files(questions_df, num_questions, num_versions, class_name="",
         'highlighted': highlighted_zip_filename
     }
 
-def get_random_questions(df, num_questions):
+def shuffle_question_answers(questions_df, random_seed=None):
+    """
+    Shuffles the answer options (A, B, C, D) for each question and updates the correct answer.
+    
+    Args:
+        questions_df: DataFrame containing questions
+        random_seed: Optional seed for reproducibility
+        
+    Returns:
+        DataFrame with shuffled answers
+    """
+    import pandas as pd
+    import numpy as np
+    
+    # Create a copy to avoid modifying the original
+    shuffled_df = questions_df.copy()
+    
+    # Set random seed if provided
+    if random_seed is not None:
+        np.random.seed(random_seed)
+    
+    # Define the answer options
+    options = ['A', 'B', 'C', 'D']
+    
+    for idx, row in shuffled_df.iterrows():
+        # Get current answer values
+        answer_values = {opt: row[opt] for opt in options}
+        correct_answer = row['đáp án']
+        
+        # Create a shuffled mapping
+        shuffled_options = options.copy()
+        np.random.shuffle(shuffled_options)
+        
+        # Create new mapping: new position -> old value
+        new_mapping = {options[i]: answer_values[shuffled_options[i]] for i in range(4)}
+        
+        # Update the row with shuffled values
+        for opt in options:
+            shuffled_df.at[idx, opt] = new_mapping[opt]
+        
+        # Update the correct answer
+        # Find which new position has the correct answer value
+        correct_value = answer_values[correct_answer]
+        for new_opt, value in new_mapping.items():
+            if value == correct_value:
+                shuffled_df.at[idx, 'đáp án'] = new_opt
+                break
+    
+    return shuffled_df
+
+def get_random_questions(df, num_questions, random_seed=None):
     """
     Gets a random sample of questions from the dataframe.
     If "Phân loại" column exists, ensures at least 1 question from each category.
+    
+    Args:
+        df: DataFrame containing questions
+        num_questions: Number of questions to select
+        random_seed: Optional seed for reproducibility
     """
     import pandas as pd
+    import numpy as np
+    
+    # Set random seed if provided
+    if random_seed is not None:
+        np.random.seed(random_seed)
     
     # Check if "Phân loại" column exists
     if 'Phân loại' not in df.columns:
         # No category column, use simple random selection
-        return df.sample(n=num_questions).reset_index(drop=True)
+        return df.sample(n=num_questions, random_state=random_seed).reset_index(drop=True)
     
-    # Get unique categories
-    categories = df['Phân loại'].unique()
+    # Filter out rows with null/empty categories
+    df_with_categories = df[df['Phân loại'].notna()].copy()
+    
+    # If no valid categories exist, fall back to simple random selection from all rows
+    if len(df_with_categories) == 0:
+        logger.warning('Cột "Phân loại" tồn tại nhưng không chứa giá trị hợp lệ nào. Sử dụng random đơn giản.')
+        return df.sample(n=num_questions, random_state=random_seed).reset_index(drop=True)
+    
+    # Get unique categories (excluding NaN)
+    categories = df_with_categories['Phân loại'].unique()
     num_categories = len(categories)
     
     # Check if we have enough questions to cover all categories
     if num_questions < num_categories:
         raise ValueError(f'Số câu hỏi ({num_questions}) phải lớn hơn hoặc bằng số phân loại ({num_categories}) để đảm bảo mỗi phân loại có ít nhất 1 câu hỏi')
     
+    # Validate each category has at least one question
+    empty_categories = []
+    for category in categories:
+        category_questions = df_with_categories[df_with_categories['Phân loại'] == category]
+        if len(category_questions) == 0:
+            empty_categories.append(str(category))
+    
+    if empty_categories:
+        raise ValueError(f'Các phân loại sau không có câu hỏi: {", ".join(empty_categories)}')
+    
     # Select at least 1 question from each category
     selected_questions = []
     selected_indices = []
     
     for category in categories:
-        category_questions = df[df['Phân loại'] == category]
+        category_questions = df_with_categories[df_with_categories['Phân loại'] == category]
         # Randomly select 1 question from this category
-        sampled = category_questions.sample(n=1)
+        sampled = category_questions.sample(n=1, random_state=random_seed)
         selected_questions.append(sampled)
         selected_indices.extend(sampled.index.tolist())
+        # Update seed for next iteration if seed is provided
+        if random_seed is not None:
+            random_seed += 1
     
     # Calculate remaining questions to select
     remaining_questions = num_questions - num_categories
     
     if remaining_questions > 0:
         # Create a pool of remaining questions (all questions except already selected)
-        remaining_df = df[~df.index.isin(selected_indices)]
+        remaining_df = df_with_categories[~df_with_categories.index.isin(selected_indices)]
         
         # Randomly select the remaining questions
-        additional_questions = remaining_df.sample(n=remaining_questions)
+        additional_questions = remaining_df.sample(n=remaining_questions, random_state=random_seed)
         
         # Add to selected questions
         selected_questions.append(additional_questions)
+        # Update seed for final shuffle if seed is provided
+        if random_seed is not None:
+            random_seed += 1
     
     # Combine all selected questions
     result_df = pd.concat(selected_questions, ignore_index=True)
     
     # Shuffle the final result to mix categories
-    result_df = result_df.sample(frac=1).reset_index(drop=True)
+    result_df = result_df.sample(frac=1, random_state=random_seed).reset_index(drop=True)
     
     return result_df
