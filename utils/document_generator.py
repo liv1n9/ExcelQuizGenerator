@@ -12,23 +12,32 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def create_word_document(questions_df, highlight_answers=False, class_name="", subject_name="", version=0):
+def create_word_document(questions_df, highlight_answers=False, class_name="", subject_name="", version=0, num_columns=2):
     """
     Creates a Word document with the given questions
     If highlight_answers is True, the correct answers are highlighted
     Optional class_name and subject_name parameters for document header
+    num_columns: Number of columns (1 or 2, default is 2)
     """
     doc = Document()
     
-    # Set document to landscape orientation
     section = doc.sections[0]
-    section.orientation = WD_ORIENTATION.LANDSCAPE
     
-    # Set narrower margins to maximize space
-    section.left_margin = Inches(0.3)  # 0.3 inch
-    section.right_margin = Inches(0.3)  # 0.3 inch
-    section.top_margin = Inches(0.3)  # 0.3 inch
-    section.bottom_margin = Inches(0.3)  # 0.3 inch
+    # Set orientation and margins based on number of columns
+    if num_columns == 1:
+        # For 1-column layout: use portrait orientation with standard margins
+        section.orientation = WD_ORIENTATION.PORTRAIT
+        section.left_margin = Inches(0.75)
+        section.right_margin = Inches(0.75)
+        section.top_margin = Inches(0.5)
+        section.bottom_margin = Inches(0.5)
+    else:
+        # For 2-column layout: use landscape orientation with narrow margins
+        section.orientation = WD_ORIENTATION.LANDSCAPE
+        section.left_margin = Inches(0.3)
+        section.right_margin = Inches(0.3)
+        section.top_margin = Inches(0.3)
+        section.bottom_margin = Inches(0.3)
     
     # Add document header with subject and class name
     header = doc.add_paragraph()
@@ -63,18 +72,18 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
     # Add a small space after the student info section
     doc.add_paragraph()
     
-    # Set up 2-column layout for questions section
+    # Set up column layout for questions section
     section.start_type = WD_SECTION.NEW_PAGE
     
-    # Create two columns
+    # Create columns based on num_columns parameter
     sectPr = section._sectPr
     if not sectPr.xpath('./w:cols'):
         cols = OxmlElement('w:cols')
-        cols.set(qn('w:num'), '2')
+        cols.set(qn('w:num'), str(num_columns))
         sectPr.append(cols)
     else:
         cols = sectPr.xpath('./w:cols')[0]
-        cols.set(qn('w:num'), '2')
+        cols.set(qn('w:num'), str(num_columns))
     
     # Try to set font style as a default for the document
     try:
@@ -133,6 +142,8 @@ def generate_zip_files(questions_df, num_questions, num_versions, class_name="",
     1. Regular version without highlighted answers
     2. Version with highlighted answers
     
+    Each version contains both 1-column and 2-column layouts
+    
     Returns dictionary with paths to both ZIP files
     """
     temp_dir = tempfile.gettempdir()
@@ -152,38 +163,44 @@ def generate_zip_files(questions_df, num_questions, num_versions, class_name="",
             # Get random questions for this version
             version_questions = get_random_questions(questions_df, num_questions)
             
-            # Create regular document with class and subject name
-            regular_doc = create_word_document(
-                version_questions, 
-                highlight_answers=False,
-                class_name=class_name,
-                subject_name=subject_name,
-                version=version-1  # version-1 because version starts at 1 in the loop
-            )
-            
-            # Create highlighted document with class and subject name
-            highlighted_doc = create_word_document(
-                version_questions, 
-                highlight_answers=True,
-                class_name=class_name,
-                subject_name=subject_name,
-                version=version-1  # version-1 because version starts at 1 in the loop
-            )
-            
-            # Save documents to temporary files
-            regular_doc_path = os.path.join(temp_dir, f"quiz_version_{version}.docx")
-            highlighted_doc_path = os.path.join(temp_dir, f"quiz_version_{version}_answers.docx")
-            
-            regular_doc.save(regular_doc_path)
-            highlighted_doc.save(highlighted_doc_path)
-            
-            # Add documents to ZIP files
-            regular_zip.write(regular_doc_path, f"quiz_version_{version}.docx")
-            highlighted_zip.write(highlighted_doc_path, f"quiz_version_{version}_answers.docx")
-            
-            # Clean up temporary document files
-            os.remove(regular_doc_path)
-            os.remove(highlighted_doc_path)
+            # Create documents for both 1-column and 2-column layouts
+            for num_cols in [2, 1]:  # 2 columns first, then 1 column
+                col_suffix = f"{num_cols}col"
+                
+                # Create regular document with class and subject name
+                regular_doc = create_word_document(
+                    version_questions, 
+                    highlight_answers=False,
+                    class_name=class_name,
+                    subject_name=subject_name,
+                    version=version-1,  # version-1 because version starts at 1 in the loop
+                    num_columns=num_cols
+                )
+                
+                # Create highlighted document with class and subject name
+                highlighted_doc = create_word_document(
+                    version_questions, 
+                    highlight_answers=True,
+                    class_name=class_name,
+                    subject_name=subject_name,
+                    version=version-1,  # version-1 because version starts at 1 in the loop
+                    num_columns=num_cols
+                )
+                
+                # Save documents to temporary files
+                regular_doc_path = os.path.join(temp_dir, f"quiz_version_{version}_{col_suffix}.docx")
+                highlighted_doc_path = os.path.join(temp_dir, f"quiz_version_{version}_{col_suffix}_answers.docx")
+                
+                regular_doc.save(regular_doc_path)
+                highlighted_doc.save(highlighted_doc_path)
+                
+                # Add documents to ZIP files
+                regular_zip.write(regular_doc_path, f"quiz_version_{version}_{col_suffix}.docx")
+                highlighted_zip.write(highlighted_doc_path, f"quiz_version_{version}_{col_suffix}_answers.docx")
+                
+                # Clean up temporary document files
+                os.remove(regular_doc_path)
+                os.remove(highlighted_doc_path)
     
     return {
         'regular': regular_zip_filename,
