@@ -107,16 +107,20 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
         run.font.name = 'Times New Roman'
         run.font.size = Pt(8)  # Smaller font
         
-        # Add options with minimal spacing and indentation
+        # Add options with minimal spacing and indentation as a list
         options = ['A', 'B', 'C', 'D']
         correct_answer = row['đáp án']
         
         for option in options:
             option_text = f"{option}: {row[option]}"
-            paragraph = doc.add_paragraph()
+            paragraph = doc.add_paragraph(style='List Bullet')
             paragraph.paragraph_format.left_indent = Pt(8)  # Smaller indentation
             paragraph.paragraph_format.space_before = Pt(0)
             paragraph.paragraph_format.space_after = Pt(0)
+            
+            # Clear default text and add custom formatted text
+            if paragraph.runs:
+                paragraph.clear()
             
             if highlight_answers and option == correct_answer:
                 # Highlight correct answer with bold
