@@ -151,10 +151,10 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
         formatting = row.get('_formatting', {})
         
         # Add question number and text (in bold)
-    paragraph = doc.add_paragraph()
-    paragraph.paragraph_format.space_after = Pt(1)  # Minimal space
-    # Justify question paragraph
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        paragraph = doc.add_paragraph()
+        paragraph.paragraph_format.space_after = Pt(1)  # Minimal space
+        # Justify question paragraph
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         
         # Add question number
         run = paragraph.add_run(f"{index + 1}. ")
