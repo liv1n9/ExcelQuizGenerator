@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const downloadArea = document.getElementById('downloadArea');
     const regularDownloadBtn = document.getElementById('regularDownloadBtn');
     const highlightedDownloadBtn = document.getElementById('highlightedDownloadBtn');
+    const fullDownloadBtn = document.getElementById('fullDownloadBtn');
     const loadingOverlay = document.getElementById('loadingOverlay');
     
     // Form validation
@@ -78,6 +79,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Set download links
                 regularDownloadBtn.href = `/download/${data.regular_zip}`;
                 highlightedDownloadBtn.href = `/download/${data.highlighted_zip}`;
+                if (fullDownloadBtn && data.full_zip) {
+                    fullDownloadBtn.href = `/download/${data.full_zip}`;
+                }
                 
                 // Show download area
                 downloadArea.classList.remove('d-none');

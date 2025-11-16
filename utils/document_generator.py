@@ -4,11 +4,14 @@ import tempfile
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_LINE_SPACING
 from docx.enum.section import WD_ORIENTATION
 from docx.enum.section import WD_SECTION
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import logging
+import re
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -57,20 +60,24 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
     section = doc.sections[0]
     
     # Set orientation and margins based on number of columns
+    # Use A4 portrait page size for all documents
+    section.orientation = WD_ORIENTATION.PORTRAIT
+    # A4 size in inches: 8.27 x 11.69
+    section.page_width = Inches(8.27)
+    section.page_height = Inches(11.69)
+
+    # Set margins (slightly narrow but printable)
+    # For two-column layouts we keep moderate margins to allow room for columns
     if num_columns == 1:
-        # For 1-column layout: use portrait orientation with standard margins
-        section.orientation = WD_ORIENTATION.PORTRAIT
-        section.left_margin = Inches(0.75)
-        section.right_margin = Inches(0.75)
+        section.left_margin = Inches(0.7)
+        section.right_margin = Inches(0.7)
+        section.top_margin = Inches(0.7)
+        section.bottom_margin = Inches(0.7)
+    else:
+        section.left_margin = Inches(0.5)
+        section.right_margin = Inches(0.5)
         section.top_margin = Inches(0.5)
         section.bottom_margin = Inches(0.5)
-    else:
-        # For 2-column layout: use landscape orientation with narrow margins
-        section.orientation = WD_ORIENTATION.LANDSCAPE
-        section.left_margin = Inches(0.3)
-        section.right_margin = Inches(0.3)
-        section.top_margin = Inches(0.3)
-        section.bottom_margin = Inches(0.3)
     
     # Add document header with subject and class name
     header = doc.add_paragraph()
@@ -121,7 +128,18 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
     # Try to set font style as a default for the document
     try:
         style = doc.styles['Normal']
-        # We'll handle font formatting at the run level instead
+        # Set default font and size for the whole document
+        style.font.name = 'Times New Roman'
+        style.font.size = Pt(8)
+        # Reduce paragraph spacing and line height
+        para_fmt = style.paragraph_format
+        para_fmt.space_before = Pt(0)
+        para_fmt.space_after = Pt(1)
+        try:
+            para_fmt.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        except Exception:
+            # Fallback: set explicit line spacing in points
+            para_fmt.line_spacing = Pt(9)
     except Exception as e:
         logger.debug(f"Error accessing style: {str(e)}")
         
@@ -133,8 +151,10 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
         formatting = row.get('_formatting', {})
         
         # Add question number and text (in bold)
-        paragraph = doc.add_paragraph()
-        paragraph.paragraph_format.space_after = Pt(1)  # Minimal space
+    paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.space_after = Pt(1)  # Minimal space
+    # Justify question paragraph
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         
         # Add question number
         run = paragraph.add_run(f"{index + 1}. ")
@@ -155,6 +175,8 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
             paragraph.paragraph_format.left_indent = Pt(8)  # Smaller indentation
             paragraph.paragraph_format.space_before = Pt(0)
             paragraph.paragraph_format.space_after = Pt(0)
+            # Justify option paragraph
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
             # Add option label
             is_bold = highlight_answers and option == correct_answer
@@ -195,70 +217,128 @@ def generate_zip_files(questions_df, num_questions, num_versions, class_name="",
     """
     temp_dir = tempfile.gettempdir()
     
+    # Helper to normalize class name into safe filename
+    def _normalize_filename(s: str) -> str:
+        if not s:
+            return ''
+        # Normalize unicode characters to ASCII equivalents
+        s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
+        s = s.lower().strip()
+        s = re.sub(r'\s+', '_', s)
+        s = re.sub(r'[^a-z0-9_-]', '', s)
+        return s or ''
+
     # Create unique filenames for the ZIP files
     regular_zip_filename = f"regular_quiz_{num_questions}q_{num_versions}v.zip"
     highlighted_zip_filename = f"highlighted_quiz_{num_questions}q_{num_versions}v.zip"
-    
+
+    # Full zip filename should be the normalized class name (fallback if empty)
+    normalized_class = _normalize_filename(class_name)
+    if not normalized_class:
+        normalized_class = f"quiz_{num_questions}q_{num_versions}v"
+
+    full_zip_filename = f"{normalized_class}.zip"
+
     regular_zip_path = os.path.join(temp_dir, regular_zip_filename)
     highlighted_zip_path = os.path.join(temp_dir, highlighted_zip_filename)
-    
-    # Create both ZIP files
+    full_zip_path = os.path.join(temp_dir, full_zip_filename)
+
+    # Create all three ZIP files
     with zipfile.ZipFile(regular_zip_path, 'w') as regular_zip, \
-         zipfile.ZipFile(highlighted_zip_path, 'w') as highlighted_zip:
-        
+         zipfile.ZipFile(highlighted_zip_path, 'w') as highlighted_zip, \
+         zipfile.ZipFile(full_zip_path, 'w') as full_zip:
+
+        # We'll collect the per-version question DataFrames to build the answer-key Excel
+        per_version_questions = []
+
         for version in range(1, num_versions + 1):
             # Calculate seed for this version if base seed provided
             version_seed = random_seed + version if random_seed is not None else None
-            
+
             # Get random questions for this version
             version_questions = get_random_questions(questions_df, num_questions, version_seed)
-            
+
             # Shuffle answers if requested
             if shuffle_answers:
                 version_questions = shuffle_question_answers(version_questions, version_seed)
-            
-            # Create documents for both 1-column and 2-column layouts
-            for num_cols in [2, 1]:  # 2 columns first, then 1 column
-                col_suffix = f"{num_cols}col"
-                
-                # Create regular document with class and subject name
-                regular_doc = create_word_document(
-                    version_questions, 
-                    highlight_answers=False,
-                    class_name=class_name,
-                    subject_name=subject_name,
-                    version=version-1,  # version-1 because version starts at 1 in the loop
-                    num_columns=num_cols
-                )
-                
-                # Create highlighted document with class and subject name
-                highlighted_doc = create_word_document(
-                    version_questions, 
-                    highlight_answers=True,
-                    class_name=class_name,
-                    subject_name=subject_name,
-                    version=version-1,  # version-1 because version starts at 1 in the loop
-                    num_columns=num_cols
-                )
-                
-                # Save documents to temporary files
-                regular_doc_path = os.path.join(temp_dir, f"quiz_version_{version}_{col_suffix}.docx")
-                highlighted_doc_path = os.path.join(temp_dir, f"quiz_version_{version}_{col_suffix}_answers.docx")
-                
-                regular_doc.save(regular_doc_path)
-                highlighted_doc.save(highlighted_doc_path)
-                
-                # Add documents to ZIP files
-                regular_zip.write(regular_doc_path, f"quiz_version_{version}_{col_suffix}.docx")
-                highlighted_zip.write(highlighted_doc_path, f"quiz_version_{version}_{col_suffix}_answers.docx")
-                
-                # Clean up temporary document files
-                os.remove(regular_doc_path)
-                os.remove(highlighted_doc_path)
+
+            # Save a single 2-column document per version (user requested only 2-column)
+            doc = create_word_document(
+                version_questions,
+                highlight_answers=False,
+                class_name=class_name,
+                subject_name=subject_name,
+                version=version-1,
+                num_columns=2
+            )
+
+            # Normalized docx filename: {normalized_class}_{version}.docx
+            doc_filename = f"{normalized_class}_{version}.docx"
+            doc_path = os.path.join(temp_dir, doc_filename)
+            doc.save(doc_path)
+
+            # Add to regular and highlighted zips for compatibility (both contain the statement docx)
+            regular_zip.write(doc_path, doc_filename)
+            highlighted_zip.write(doc_path, doc_filename)
+
+            # Add to full zip as well
+            full_zip.write(doc_path, doc_filename)
+
+            # Store the DataFrame for the Excel answer-key
+            per_version_questions.append((f"V{version}", version_questions.copy()))
+
+            # Clean up temporary docx
+            os.remove(doc_path)
+
+        # After generating all versions, build the Excel answer-key with one sheet per version
+        try:
+            import pandas as pd
+
+            excel_filename = f"{normalized_class}_answer_key.xlsx"
+            excel_path = os.path.join(temp_dir, excel_filename)
+
+            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                for sheet_name, df in per_version_questions:
+                    # Build sheet with columns: STT câu, nội dung câu, A, B, C, D, đáp án, phân loại
+                    rows = []
+                    for idx, row in df.iterrows():
+                        stt = idx + 1
+                        content = row.get('Câu hỏi', '')
+                        a = row.get('A', '')
+                        b = row.get('B', '')
+                        c = row.get('C', '')
+                        d = row.get('D', '')
+                        key = row.get('đáp án', '')
+                        category = row.get('Phân loại', '') if 'Phân loại' in row.index else ''
+                        rows.append({
+                            'STT câu': stt,
+                            'Nội dung câu': content,
+                            'A': a,
+                            'B': b,
+                            'C': c,
+                            'D': d,
+                            'đáp án': key,
+                            'phân loại': category
+                        })
+
+                    sheet_df = pd.DataFrame(rows, columns=['STT câu', 'Nội dung câu', 'A', 'B', 'C', 'D', 'đáp án', 'phân loại'])
+                    # Write to a sheet named V1, V2, ...
+                    sheet_df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+            # Add the excel file into the full ZIP
+            full_zip.write(excel_path, excel_filename)
+
+            # Clean up excel file
+            os.remove(excel_path)
+        except Exception as e:
+            logger.exception(f"Failed to create answer-key Excel: {e}")
+            # If Excel creation fails, proceed without adding it
+            pass
     
     return {
         'regular': regular_zip_filename,
-        'highlighted': highlighted_zip_filename
+        'highlighted': highlighted_zip_filename,
+        'full': full_zip_filename
     }
 
 def shuffle_question_answers(questions_df, random_seed=None):

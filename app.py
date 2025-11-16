@@ -129,7 +129,8 @@ def upload_file():
             'success': True,
             'message': 'Tạo file thành công',
             'regular_zip': zip_files['regular'],
-            'highlighted_zip': zip_files['highlighted']
+            'highlighted_zip': zip_files['highlighted'],
+            'full_zip': zip_files.get('full')
         })
     
     except Exception as e:
