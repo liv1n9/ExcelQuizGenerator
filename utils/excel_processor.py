@@ -1,8 +1,84 @@
 import pandas as pd
 import numpy as np
 import logging
+from openpyxl import load_workbook
+from openpyxl.cell.rich_text import TextBlock, CellRichText
 
 logger = logging.getLogger(__name__)
+
+def extract_rich_text_from_cell(cell):
+    """
+    Extracts rich text formatting from an Excel cell.
+    Returns a list of tuples: (text, is_subscript, is_superscript)
+    """
+    if cell.value is None:
+        return []
+    
+    # Check if the cell contains rich text
+    if isinstance(cell.value, CellRichText):
+        result = []
+        for text_block in cell.value:
+            text = str(text_block)
+            is_subscript = False
+            is_superscript = False
+            
+            # Check if the text block has font formatting
+            if hasattr(text_block, 'font') and text_block.font:
+                if hasattr(text_block.font, 'vertAlign'):
+                    if text_block.font.vertAlign == 'subscript':
+                        is_subscript = True
+                    elif text_block.font.vertAlign == 'superscript':
+                        is_superscript = True
+            
+            result.append((text, is_subscript, is_superscript))
+        return result
+    else:
+        # Plain text - return as a single block
+        return [(str(cell.value), False, False)]
+
+def read_excel_with_formatting(file_path, sheet_name=0):
+    """
+    Reads an Excel file and preserves rich text formatting (subscript/superscript).
+    Returns a DataFrame with an additional column '_formatting' that contains formatting info.
+    """
+    # Load workbook with openpyxl to access formatting
+    wb = load_workbook(file_path, data_only=False, rich_text=True)
+    
+    # Get the sheet
+    if isinstance(sheet_name, int):
+        ws = wb.worksheets[sheet_name]
+    else:
+        ws = wb[sheet_name]
+    
+    # Read data with pandas for easy DataFrame creation
+    df = pd.read_excel(file_path, sheet_name=sheet_name)
+    
+    # Get header row (first row)
+    headers = [cell.value for cell in ws[1]]
+    
+    # Create a dictionary to store formatting info for each cell
+    # Format: {row_index: {column_name: [(text, is_subscript, is_superscript), ...]}}
+    formatting_data = {}
+    
+    # Iterate through data rows (skip header)
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=0):
+        row_formatting = {}
+        for col_idx, cell in enumerate(row):
+            if col_idx < len(headers):
+                col_name = headers[col_idx]
+                if col_name:  # Skip empty column names
+                    rich_text = extract_rich_text_from_cell(cell)
+                    if rich_text:
+                        row_formatting[col_name] = rich_text
+        
+        if row_formatting:
+            formatting_data[row_idx] = row_formatting
+    
+    # Add formatting data to DataFrame as a new column
+    df['_formatting'] = df.index.map(lambda i: formatting_data.get(i, {}))
+    
+    wb.close()
+    return df
 
 def validate_excel_format(df):
     """
@@ -65,8 +141,8 @@ def validate_excel_file(file_path):
         if not sheet_names:
             return {'error': 'File Excel không chứa sheet nào'}
             
-        # Validate first sheet to check format
-        first_sheet = pd.read_excel(file_path, sheet_name=sheet_names[0])
+        # Validate first sheet to check format (use new function to preserve formatting)
+        first_sheet = read_excel_with_formatting(file_path, sheet_name=sheet_names[0])
         return validate_excel_format(first_sheet)
     
     except Exception as e:

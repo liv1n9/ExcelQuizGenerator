@@ -4,7 +4,7 @@ import tempfile
 from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 from werkzeug.utils import secure_filename
-from utils.excel_processor import validate_excel_file, validate_excel_format, get_random_questions
+from utils.excel_processor import validate_excel_file, validate_excel_format, get_random_questions, read_excel_with_formatting
 from utils.document_generator import generate_zip_files
 
 # Configure logging
@@ -91,10 +91,10 @@ def upload_file():
         excel_file = pd.ExcelFile(file_path)
         sheet_names = excel_file.sheet_names
         
-        # Concatenate all sheets into one dataframe
+        # Concatenate all sheets into one dataframe (with formatting preserved)
         all_questions = []
         for sheet_name in sheet_names:
-            sheet_df = pd.read_excel(file_path, sheet_name=sheet_name)
+            sheet_df = read_excel_with_formatting(file_path, sheet_name=sheet_name)
             # Validate sheet format
             validation_result = validate_excel_format(sheet_df)
             if 'error' in validation_result:

@@ -12,6 +12,39 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def add_formatted_text(paragraph, text, formatting_info=None, font_size=8, bold=False):
+    """
+    Adds text to a paragraph with formatting (subscript/superscript) if available.
+    
+    Args:
+        paragraph: The paragraph object to add text to
+        text: The plain text (used if no formatting_info)
+        formatting_info: List of tuples (text, is_subscript, is_superscript) or None
+        font_size: Font size in points
+        bold: Whether to make text bold
+    """
+    if formatting_info and len(formatting_info) > 0:
+        # Use rich text formatting
+        for text_part, is_subscript, is_superscript in formatting_info:
+            run = paragraph.add_run(text_part)
+            run.font.name = 'Times New Roman'
+            run.font.size = Pt(font_size)
+            run.bold = bold
+            
+            # Apply subscript or superscript
+            if is_subscript:
+                run.font.subscript = True
+            elif is_superscript:
+                run.font.superscript = True
+    else:
+        # Plain text
+        run = paragraph.add_run(str(text))
+        run.font.name = 'Times New Roman'
+        run.font.size = Pt(font_size)
+        run.bold = bold
+    
+    return paragraph
+
 def create_word_document(questions_df, highlight_answers=False, class_name="", subject_name="", version=0, num_columns=2):
     """
     Creates a Word document with the given questions
@@ -96,38 +129,43 @@ def create_word_document(questions_df, highlight_answers=False, class_name="", s
     total_questions = len(questions_df)
     
     for index, row in questions_df.iterrows():
+        # Get formatting info if available
+        formatting = row.get('_formatting', {})
+        
         # Add question number and text (in bold)
-        question_text = f"{index + 1}. {row['Câu hỏi']}"
         paragraph = doc.add_paragraph()
         paragraph.paragraph_format.space_after = Pt(1)  # Minimal space
         
-        # Add question in bold with Times New Roman font
-        run = paragraph.add_run(question_text)
+        # Add question number
+        run = paragraph.add_run(f"{index + 1}. ")
         run.bold = True
         run.font.name = 'Times New Roman'
-        run.font.size = Pt(8)  # Smaller font
+        run.font.size = Pt(8)
+        
+        # Add question text with formatting
+        question_formatting = formatting.get('Câu hỏi', None)
+        add_formatted_text(paragraph, row['Câu hỏi'], question_formatting, font_size=8, bold=True)
         
         # Add options with minimal spacing and indentation
         options = ['A', 'B', 'C', 'D']
         correct_answer = row['đáp án']
         
         for option in options:
-            option_text = f"{option}: {row[option]}"
             paragraph = doc.add_paragraph()
             paragraph.paragraph_format.left_indent = Pt(8)  # Smaller indentation
             paragraph.paragraph_format.space_before = Pt(0)
             paragraph.paragraph_format.space_after = Pt(0)
             
-            if highlight_answers and option == correct_answer:
-                # Highlight correct answer with bold
-                run = paragraph.add_run(option_text)
-                run.bold = True
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(8)
-            else:
-                run = paragraph.add_run(option_text)
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(8)
+            # Add option label
+            is_bold = highlight_answers and option == correct_answer
+            run = paragraph.add_run(f"{option}: ")
+            run.font.name = 'Times New Roman'
+            run.font.size = Pt(8)
+            run.bold = is_bold
+            
+            # Add option text with formatting
+            option_formatting = formatting.get(option, None)
+            add_formatted_text(paragraph, row[option], option_formatting, font_size=8, bold=is_bold)
         
         # Add minimal separator between questions
         p = doc.add_paragraph()
@@ -252,16 +290,29 @@ def shuffle_question_answers(questions_df, random_seed=None):
         answer_values = {opt: row[opt] for opt in options}
         correct_answer = row['đáp án']
         
+        # Get formatting info if available
+        formatting = row.get('_formatting', {})
+        answer_formatting = {opt: formatting.get(opt, None) for opt in options}
+        
         # Create a shuffled mapping
         shuffled_options = options.copy()
         np.random.shuffle(shuffled_options)
         
         # Create new mapping: new position -> old value
         new_mapping = {options[i]: answer_values[shuffled_options[i]] for i in range(4)}
+        new_formatting_mapping = {options[i]: answer_formatting[shuffled_options[i]] for i in range(4)}
         
         # Update the row with shuffled values
         for opt in options:
             shuffled_df.at[idx, opt] = new_mapping[opt]
+        
+        # Update formatting for shuffled answers
+        if formatting:
+            new_formatting = formatting.copy()
+            for opt in options:
+                if new_formatting_mapping[opt] is not None:
+                    new_formatting[opt] = new_formatting_mapping[opt]
+            shuffled_df.at[idx, '_formatting'] = new_formatting
         
         # Update the correct answer
         # Find which new position has the correct answer value
